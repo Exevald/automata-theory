@@ -1,0 +1,10 @@
+digraph MooreMachine {
+  S2_w1 [label="S2_w1 / w1"];
+  S3_w1 [label="S3_w1 / w1"];
+  S3_w2 [label="S3_w2 / w2"];
+  S4_w2 [label="S4_w2 / w2"];
+  S1_w1 -> S3_w1 [label="1"];
+  S1_w1 -> S2_w1 [label="2"];
+  S2_w1 -> S3_w2 [label="1"];
+  S3_w1 -> S4_w2 [label="1"];
+}
