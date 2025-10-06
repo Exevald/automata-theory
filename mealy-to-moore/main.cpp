@@ -6,7 +6,7 @@ int main()
 {
 	try
 	{
-		MealyMachine mealy = MealyMachine::FromDotFile("input.dot");
+		MealyMachine mealy = MealyMachine::FromDotFile("temp.dot");
 		std::cout << mealy.ToDotFile() << "\n";
 
 		MooreMachine moore(mealy);

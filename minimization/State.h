@@ -8,7 +8,7 @@ class State
 {
 public:
 	State() = default;
-	explicit State(std::string  name)
+	explicit State(std::string name)
 		: m_name(std::move(name))
 	{
 	}
@@ -25,6 +25,7 @@ public:
 	{
 		return m_name;
 	}
+	auto operator<=>(const State& state) const = default;
 
 private:
 	std::string m_name;

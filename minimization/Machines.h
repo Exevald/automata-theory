@@ -17,6 +17,7 @@ class MealyMachine
 public:
 	MealyMachine();
 	explicit MealyMachine(const MooreMachine& moore);
+	[[nodiscard]] MealyMachine Minimize() const;
 	static MealyMachine FromDotFile(const std::string& filename);
 	[[nodiscard]] std::string ToDotFile() const;
 	void SaveToFile(const std::string& filename) const;
@@ -35,6 +36,7 @@ class MooreMachine
 public:
 	MooreMachine();
 	explicit MooreMachine(const MealyMachine& mealy);
+	[[nodiscard]] MooreMachine Minimize() const;
 	[[nodiscard]] std::string ToDot() const;
 	void SaveToFile(const std::string& filename) const;
 	[[nodiscard]] std::set<State> GetStates() const;

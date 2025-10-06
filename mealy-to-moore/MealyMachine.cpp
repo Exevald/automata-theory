@@ -31,8 +31,8 @@ MealyMachine MealyMachine::FromDotFile(const std::string& filename)
 	}
 
 	std::string line;
-	std::regex stateRegex("^\\s*(\\w+)\\s*\\[label\\s*=\\s*\"([^\"]*)\"\\]\\s*$");
-	std::regex transitionRegex("^\\s*(\\w+)\\s*->\\s*(\\w+)\\s*\\[label\\s*=\\s*\"([^\"]*)\"\\]\\s*$");
+	std::regex stateRegex(R"lit(^\s*(\w+)\s*\[label\s*=\s*"([^"]*)"\]\s*$)lit");
+	std::regex transitionRegex(R"lit(^\s*(\w+)\s*->\s*(\w+)\s*\[label\s*=\s*"([^"]*)"\]\s*$)lit");
 	std::regex labelRegex("^([^/]+)/(.+)$");
 
 	std::map<std::string, State> stateMap;
@@ -85,7 +85,7 @@ std::string MealyMachine::ToDotFile() const
 
 	for (const State& s : m_states)
 	{
-		oss << "  " << s.GetName() << " [label=\"" << s.GetName() << "\"];\n";
+		oss << "  \"" << s.GetName() << "\" [label=\"" << s.GetName() << "\"];\n";
 	}
 	for (const auto& [fst, snd] : m_transitions)
 	{
@@ -93,7 +93,7 @@ std::string MealyMachine::ToDotFile() const
 		const std::string& input = fst.second;
 		const State& dstState = snd.first;
 		const std::string& output = snd.second;
-		oss << "  " << srcState.GetName() << " -> " << dstState.GetName() << " [label=\"" << input << "/" << output << "\"];\n";
+		oss << "  \"" << srcState.GetName() << "\" -> \"" << dstState.GetName() << "\" [label=\"" << input << "/" << output << "\"];\n";
 	}
 	oss << "}\n";
 

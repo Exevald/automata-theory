@@ -1,6 +1,7 @@
 #include "Machines.h"
 
 #include <fstream>
+#include <ranges>
 
 MooreMachine::MooreMachine()
 	: m_startState("")
@@ -57,6 +58,117 @@ MooreMachine::MooreMachine(const MealyMachine& mealy)
 			}
 		}
 	}
+}
+
+MooreMachine MooreMachine::Minimize() const
+{
+	if (m_states.empty())
+		return *this;
+
+	std::map<std::string, std::set<State>> outputGroups;
+	for (const State& s : m_states)
+	{
+		outputGroups[m_outputsMap.at(s)].insert(s);
+	}
+
+	std::vector<std::set<State>> partitions;
+	for (const auto& states : outputGroups | std::views::values)
+	{
+		partitions.push_back(states);
+	}
+
+	std::set<std::string> inputs;
+	for (const auto& pair : m_transitions | std::views::keys)
+	{
+		inputs.insert(pair.second);
+	}
+
+	bool changed = true;
+	while (changed)
+	{
+		changed = false;
+		std::vector<std::set<State>> newPartitions;
+
+		for (const auto& part : partitions)
+		{
+			std::map<std::vector<int>, std::set<State>> signatureGroups;
+
+			for (const State& s : part)
+			{
+				std::vector<int> sig;
+				for (const std::string& inp : inputs)
+				{
+					auto it = m_transitions.find(std::make_pair(s, inp));
+					if (it != m_transitions.end())
+					{
+						const State& next = it->second;
+						int classIdx = -1;
+						for (int i = 0; i < partitions.size(); ++i)
+						{
+							if (partitions[i].contains(next))
+							{
+								classIdx = i;
+								break;
+							}
+						}
+						sig.push_back(classIdx);
+					}
+					else
+					{
+						sig.push_back(-1);
+					}
+				}
+				signatureGroups[sig].insert(s);
+			}
+
+			if (signatureGroups.size() > 1)
+			{
+				changed = true;
+				for (const auto& group : signatureGroups | std::views::values)
+				{
+					newPartitions.push_back(group);
+				}
+			}
+			else
+			{
+				newPartitions.push_back(part);
+			}
+		}
+
+		partitions = std::move(newPartitions);
+	}
+
+	MooreMachine minimized;
+	std::map<State, State> stateMap;
+
+	for (const auto& part : partitions)
+	{
+		State rep = *part.begin();
+		for (const State& s : part)
+		{
+			stateMap[s] = rep;
+		}
+	}
+
+	for (const auto& part : partitions)
+	{
+		State rep = *part.begin();
+		minimized.m_states.insert(rep);
+		minimized.m_outputsMap[rep] = m_outputsMap.at(rep);
+	}
+
+	minimized.m_startState = stateMap.at(m_startState);
+
+	for (const auto& [pair, to] : m_transitions)
+	{
+		State from = pair.first;
+		std::string input = pair.second;
+		State newFrom = stateMap.at(from);
+		const State& newTo = stateMap.at(to);
+		minimized.m_transitions[std::make_pair(newFrom, input)] = newTo;
+	}
+
+	return minimized;
 }
 
 std::string MooreMachine::ToDot() const
