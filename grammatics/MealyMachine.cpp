@@ -3,6 +3,14 @@
 #include <fstream>
 #include <ranges>
 
+namespace
+{
+State CreateNewState(int& counter)
+{
+	return State("Q" + std::to_string(counter++));
+}
+} // namespace
+
 MealyMachine::MealyMachine()
 	: m_startState("")
 {
@@ -18,8 +26,134 @@ MealyMachine::MealyMachine(const MooreMachine& moore)
 		const std::string& input = srcStateInfo.second;
 		const State& to = dstStateInfo;
 		std::string output = moore.GetOutputs().at(to);
-		m_transitions[std::make_pair(from, input)] = std::make_pair(to, output);
+
+		std::set<std::pair<State, std::string>> transitionSet;
+		transitionSet.insert(std::make_pair(to, output));
+
+		m_transitions[std::make_pair(from, input)] = transitionSet;
+
+		if (output != "ε" && !output.empty())
+		{
+			m_finalStates.insert(from);
+		}
 	}
+}
+
+std::set<State> MealyMachine::EpsilonClosure(const std::set<State>& states) const
+{
+	std::set<State> closure = states;
+	std::vector stack(states.begin(), states.end());
+
+	while (!stack.empty())
+	{
+		State currentState = stack.back();
+		stack.pop_back();
+
+		if (m_transitions.contains({ currentState, EPSILON }))
+		{
+			for (const auto& nextPair : m_transitions.at({ currentState, EPSILON }))
+			{
+				const State& nextState = nextPair.first;
+				if (!closure.contains(nextState))
+				{
+					closure.insert(nextState);
+					stack.push_back(nextState);
+				}
+			}
+		}
+	}
+
+	return closure;
+}
+
+MealyMachine MealyMachine::Determinize() const
+{
+	MealyMachine dfa;
+	if (m_states.empty())
+		return dfa;
+
+	std::set<std::string> alphabet = GetAlphabet();
+
+	std::set<State> initialClosure = EpsilonClosure({ m_startState });
+
+	std::map<std::set<State>, State> dfaStatesMap;
+	std::vector<std::set<State>> unmarkedStates;
+
+	int stateCounter = 0;
+	State newStartState = CreateNewState(stateCounter);
+
+	dfaStatesMap[initialClosure] = newStartState;
+	dfa.m_startState = newStartState;
+	unmarkedStates.push_back(initialClosure);
+
+	while (!unmarkedStates.empty())
+	{
+		std::set<State> currentNfaSet = unmarkedStates.back();
+		unmarkedStates.pop_back();
+		State currentDfaState = dfaStatesMap.at(currentNfaSet);
+		dfa.m_states.insert(currentDfaState);
+
+		bool isFinal = false;
+		for (const State& nfaState : currentNfaSet)
+		{
+			if (m_finalStates.contains(nfaState))
+			{
+				isFinal = true;
+				break;
+			}
+		}
+		if (isFinal)
+		{
+			dfa.m_finalStates.insert(currentDfaState);
+		}
+
+		for (const std::string& input : alphabet)
+		{
+			std::set<State> nextNfaSet;
+			std::set<std::string> possibleOutputs;
+
+			for (const State& nfaState : currentNfaSet)
+			{
+				if (m_transitions.contains({ nfaState, input }))
+				{
+					for (const auto& [fst, snd] : m_transitions.at({ nfaState, input }))
+					{
+						nextNfaSet.insert(fst);
+						possibleOutputs.insert(snd);
+					}
+				}
+			}
+
+			if (std::set<State> nextDfaSet = EpsilonClosure(nextNfaSet); !nextDfaSet.empty())
+			{
+				State nextDfaState;
+				if (!dfaStatesMap.contains(nextDfaSet))
+				{
+					nextDfaState = CreateNewState(stateCounter);
+					dfaStatesMap[nextDfaSet] = nextDfaState;
+					unmarkedStates.push_back(nextDfaSet);
+				}
+				else
+				{
+					nextDfaState = dfaStatesMap.at(nextDfaSet);
+				}
+
+				std::string output = possibleOutputs.contains("1") ? "1" : "0";
+				if (output == "0" && !possibleOutputs.empty())
+				{
+					output = *possibleOutputs.begin();
+				}
+				else if (possibleOutputs.empty())
+				{
+					output = "0";
+				}
+
+				dfa.m_transitions[{ currentDfaState, input }] = { { nextDfaState, output } };
+			}
+		}
+	}
+
+	return dfa.Minimize();
 }
 
 MealyMachine MealyMachine::Minimize() const
@@ -45,20 +179,24 @@ MealyMachine MealyMachine::Minimize() const
 			const State& s1 = stateVec[i];
 			const State& s2 = stateVec[j];
 			bool diff = false;
+
 			for (const std::string& inp : inputs)
 			{
 				auto it1 = m_transitions.find(std::make_pair(s1, inp));
 				auto it2 = m_transitions.find(std::make_pair(s2, inp));
+
 				if (it1 == m_transitions.end() && it2 == m_transitions.end())
-				{
 					continue;
-				}
+
 				if (it1 == m_transitions.end() || it2 == m_transitions.end())
 				{
 					diff = true;
 					break;
 				}
-				if (it1->second.second != it2->second.second)
+
+				const auto& [state1, out1] = *it1->second.begin();
+				const auto& [state2, out2] = *it2->second.begin();
+				if (out1 != out2)
 				{
 					diff = true;
 					break;
@@ -82,18 +220,22 @@ MealyMachine MealyMachine::Minimize() const
 				const State& s1 = stateVec[i];
 				const State& s2 = stateVec[j];
 				auto key = std::make_pair(s1, s2);
+
 				if (distinguishable.contains(key) && distinguishable[key])
 				{
 					continue;
 				}
+
 				for (const std::string& inp : inputs)
 				{
 					auto it1 = m_transitions.find(std::make_pair(s1, inp));
 					auto it2 = m_transitions.find(std::make_pair(s2, inp));
+
 					if (it1 == m_transitions.end() && it2 == m_transitions.end())
 					{
 						continue;
 					}
+
 					if (it1 == m_transitions.end() || it2 == m_transitions.end())
 					{
 						if (!distinguishable[key])
@@ -104,8 +246,9 @@ MealyMachine MealyMachine::Minimize() const
 						break;
 					}
 
-					State next1 = it1->second.first;
-					State next2 = it2->second.first;
+					State next1 = it1->second.begin()->first;
+					State next2 = it2->second.begin()->first;
+
 					if (next1 == next2)
 					{
 						continue;
@@ -115,7 +258,9 @@ MealyMachine MealyMachine::Minimize() const
 					{
 						std::swap(next1, next2);
 					}
-					if (distinguishable.contains(std::make_pair(next1, next2)) && distinguishable[std::make_pair(next1, next2)])
+
+					if (distinguishable.contains(std::make_pair(next1, next2))
+						&& distinguishable[std::make_pair(next1, next2)])
 					{
 						if (!distinguishable[key])
 						{
@@ -174,19 +319,67 @@ MealyMachine MealyMachine::Minimize() const
 		minimized.m_states.insert(*cls.begin());
 	}
 
-	for (const auto& [pair, outputPair] : m_transitions)
+	for (const auto& [pair, outputSet] : m_transitions)
 	{
 		State from = pair.first;
 		std::string input = pair.second;
-		State to = outputPair.first;
-		std::string out = outputPair.second;
+
+		if (outputSet.empty())
+		{
+			continue;
+		}
+
+		const State& to = outputSet.begin()->first;
+		const std::string& out = outputSet.begin()->second;
 
 		State newFrom = rep.at(from);
 		State newTo = rep.at(to);
-		minimized.m_transitions[std::make_pair(newFrom, input)] = std::make_pair(newTo, out);
+
+		minimized.m_transitions[std::make_pair(newFrom, input)].insert(std::make_pair(newTo, out));
+	}
+
+	for (const State& s : m_finalStates)
+	{
+		if (rep.contains(s))
+		{
+			minimized.m_finalStates.insert(rep.at(s));
+		}
 	}
 
 	return minimized;
+}
+
+std::set<std::string> MealyMachine::GetAlphabet() const
+{
+	std::set<std::string> alphabet;
+	for (const auto& transition : m_transitions | std::views::keys)
+	{
+		if (transition.second != EPSILON)
+		{
+			alphabet.insert(transition.second);
+		}
+	}
+	return alphabet;
+}
+
+std::set<State> MealyMachine::GetFinalStates() const
+{
+	return m_finalStates;
+}
+
+std::set<State> MealyMachine::GetStates() const
+{
+	return m_states;
+}
+
+MealyTransitions MealyMachine::GetTransitions() const
+{
+	return m_transitions;
+}
+
+State MealyMachine::GetStartState() const
+{
+	return m_startState;
 }
 
 MealyMachine MealyMachine::FromDotFile(const std::string& filename)
@@ -232,7 +425,8 @@ MealyMachine MealyMachine::FromDotFile(const std::string& filename)
 				State srcState = stateMap[srcStateName];
 				State dstState = stateMap[dstStateName];
 
-				machine.m_transitions[std::make_pair(srcState, input)] = std::make_pair(dstState, output);
+				machine.m_transitions[std::make_pair(srcState, input)].insert(
+					std::make_pair(dstState, output));
 			}
 			else
 			{
@@ -248,20 +442,39 @@ MealyMachine MealyMachine::FromDotFile(const std::string& filename)
 std::string MealyMachine::ToDotFile() const
 {
 	std::ostringstream oss;
-
 	oss << "digraph MealyMachine {\n";
 
 	for (const State& s : m_states)
 	{
-		oss << "  \"" << s.GetName() << "\" [label=\"" << s.GetName() << "\"];\n";
+		std::string attributes;
+
+		if (s == m_startState) {
+			attributes += "style=bold, shape=box";
+		}
+		if (m_finalStates.contains(s)) {
+			if (!attributes.empty()) {
+				attributes += ", ";
+			}
+			attributes += "shape=doublecircle";
+		}
+		if (!attributes.empty()) {
+			attributes = ", " + attributes;
+		}
+
+		oss << "  \"" << s.GetName() << "\" [label=\"" << s.GetName() << "\"" << attributes << "];\n";
 	}
-	for (const auto& [fst, snd] : m_transitions)
+
+	for (const auto& [fst, outputSet] : m_transitions)
 	{
 		const State& srcState = fst.first;
 		const std::string& input = fst.second;
-		const State& dstState = snd.first;
-		const std::string& output = snd.second;
-		oss << "  \"" << srcState.GetName() << "\" -> \"" << dstState.GetName() << "\" [label=\"" << input << "/" << output << "\"];\n";
+
+		for (const auto& [state, out] : outputSet)
+		{
+			const State& dstState = state;
+			const std::string& output = out;
+			oss << "  \"" << srcState.GetName() << "\" -> \"" << dstState.GetName() << "\" [label=\"" << input << "/" << output << "\"];\n";
+		}
 	}
 	oss << "}\n";
 
@@ -277,19 +490,4 @@ void MealyMachine::SaveToFile(const std::string& filename) const
 	}
 	file << ToDotFile();
 	file.close();
-}
-
-std::set<State> MealyMachine::GetStates() const
-{
-	return m_states;
-}
-
-MealyTransitions MealyMachine::GetTransitions() const
-{
-	return m_transitions;
-}
-
-State MealyMachine::GetStartState() const
-{
-	return m_startState;
 }

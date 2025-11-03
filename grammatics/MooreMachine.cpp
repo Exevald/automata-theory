@@ -12,12 +12,17 @@ MooreMachine::MooreMachine(const MealyMachine& mealy)
 {
 	std::map<std::pair<State, std::string>, State> mealyToMoore;
 
-	for (const auto& [inputPair, outputPair] : mealy.GetTransitions())
+	for (const auto& [inputPair, outputSet] : mealy.GetTransitions())
 	{
-		const State& toState = outputPair.first;
-		const std::string& output = outputPair.second;
-		if (auto key = std::make_pair(toState, output);
-			!mealyToMoore.contains(key))
+		if (outputSet.empty() || outputSet.size() > 1)
+		{
+			throw std::runtime_error("MealyMachine is not Deterministic (or malformed) for Moore conversion.");
+		}
+
+		const State& toState = outputSet.begin()->first;
+		const std::string& output = outputSet.begin()->second;
+
+		if (auto key = std::make_pair(toState, output); !mealyToMoore.contains(key))
 		{
 			std::string newName = toState.GetName() + "/" + output;
 			mealyToMoore[key] = State(newName);
@@ -30,24 +35,25 @@ MooreMachine::MooreMachine(const MealyMachine& mealy)
 	m_states.insert(m_startState);
 	m_outputsMap[m_startState] = "ε";
 	const State& mealyStart = mealy.GetStartState();
-	for (const auto& [inputPair, outputPair] : mealy.GetTransitions())
+
+	for (const auto& [inputPair, outputSet] : mealy.GetTransitions())
 	{
 		if (inputPair.first == mealyStart)
 		{
 			const std::string& input = inputPair.second;
-			const State& toState = outputPair.first;
-			const std::string& output = outputPair.second;
+			const State& toState = outputSet.begin()->first;
+			const std::string& output = outputSet.begin()->second;
 			State mooreTo = mealyToMoore.at(std::make_pair(toState, output));
 			m_transitions[std::make_pair(m_startState, input)] = mooreTo;
 		}
 	}
 
-	for (const auto& [inputPair, outputPair] : mealy.GetTransitions())
+	for (const auto& [inputPair, outputSet] : mealy.GetTransitions())
 	{
 		const State& fromMealy = inputPair.first;
 		const std::string& input = inputPair.second;
-		const State& toMealy = outputPair.first;
-		const std::string& output = outputPair.second;
+		const State& toMealy = outputSet.begin()->first;
+		const std::string& output = outputSet.begin()->second;
 
 		for (const auto& [key, mooreFrom] : mealyToMoore)
 		{
@@ -58,6 +64,68 @@ MooreMachine::MooreMachine(const MealyMachine& mealy)
 			}
 		}
 	}
+}
+
+MooreMachine MooreMachine::FromDotFile(const std::string& filename)
+{
+    MooreMachine machine;
+    std::ifstream file(filename);
+    if (!file.is_open())
+    {
+       throw std::runtime_error("Cannot open file: " + filename);
+    }
+
+    std::string line;
+    std::regex stateRegex(R"lit(^\s*"(\w+)"\s*\[label\s*=\s*"[^/]+/\s*([^"]+)"\]\s*$)lit");
+    std::regex transitionRegex(R"lit(^\s*"(\w+)"\s*->\s*"(\w+)"\s*\[label\s*=\s*"([^"]+)"\]\s*$)lit");
+
+    std::map<std::string, State> stateMap;
+
+    while (std::getline(file, line))
+    {
+       std::smatch match;
+
+       if (std::regex_match(line, match, stateRegex))
+       {
+          std::string name = match[1];
+          std::string output = match[2];
+
+          State state(name);
+          stateMap[name] = state;
+          machine.m_states.insert(state);
+          machine.m_outputsMap[state] = output;
+
+          if (machine.m_startState.GetName().empty())
+          {
+             machine.m_startState = state;
+          }
+       }
+       else if (std::regex_match(line, match, transitionRegex))
+       {
+          std::string srcStateName = match[1];
+          std::string dstStateName = match[2];
+          std::string input = match[3];
+
+          if (!stateMap.contains(srcStateName) || !stateMap.contains(dstStateName))
+          {
+             throw std::runtime_error("Transition references unknown state in DOT file.");
+          }
+
+          State srcState = stateMap.at(srcStateName);
+          const State& dstState = stateMap.at(dstStateName);
+
+          machine.m_transitions[std::make_pair(srcState, input)] = dstState;
+       }
+    }
+
+    file.close();
+
+    if (machine.m_startState.GetName().empty() && !machine.m_states.empty())
+    {
+        machine.m_startState = *machine.m_states.begin();
+    }
+
+    return machine;
 }
 
 MooreMachine MooreMachine::Minimize() const
@@ -173,16 +241,16 @@ MooreMachine MooreMachine::Minimize() const
 	return minimized;
 }
 
-std::string MooreMachine::ToDot() const
+std::string MooreMachine::ToDotFile() const
 {
 	std::ostringstream oss;
 	oss << "digraph MooreMachine {\n";
 
 	for (const State& s : m_states)
 	{
-		oss << "  \"" << s.GetName() << "\" [label=\"" << s.GetName() << " / " << m_outputsMap.at(s) << "\"];\n";
+		std::string shape = (s == m_startState) ? ", shape=box, style=bold" : "";
+		oss << "  \"" << s.GetName() << "\" [label=\"" << s.GetName() << " / " << m_outputsMap.at(s) << "\"" << shape << "];\n";
 	}
-
 	for (const auto& [srcState, dstState] : m_transitions)
 	{
 		const State& from = srcState.first;
@@ -202,7 +270,7 @@ void MooreMachine::SaveToFile(const std::string& filename) const
 	{
 		throw std::runtime_error("Cannot open file for writing: " + filename);
 	}
-	file << ToDot();
+	file << ToDotFile();
 	file.close();
 }
 

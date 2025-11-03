@@ -8,3 +8,4 @@ enable_testing()
 
 add_subdirectory(mealy-to-moore)
 add_subdirectory(minimization)
+add_subdirectory(grammatics)

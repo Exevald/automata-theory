@@ -6,12 +6,11 @@ int main()
 {
 	try
 	{
-		const MealyMachine mealy = MealyMachine::FromDotFile("temp.dot");
+		MealyMachine mealy = MealyMachine::FromDotFile("temp.dot");
 		std::cout << mealy.ToDotFile() << "\n";
 
-		const MealyMachine minimized = mealy.Minimize();
-		minimized.SaveToFile("minimized.dot");
-		std::cout << minimized.ToDotFile() << "\n";
+		auto minized = mealy.Minimize();
+		minized.SaveToFile("minimized.dot");
 	}
 	catch (const std::exception& exception)
 	{
