@@ -1,2 +1,2 @@
-A -> Aa | Ab
-A -> ε
+S -> Sa | As | a | b
+A -> Aa

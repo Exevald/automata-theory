@@ -1,5 +1,6 @@
-S -> aB
-S -> aD
-D -> d
-B -> bB
-B -> c
+S -> aS | bA
+A -> aS | bA | b
+
+S -> Aa
+A -> Aa | Bb
+B -> Bb | Sa | b

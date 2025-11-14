@@ -12,10 +12,6 @@ int main()
 		nfa.SaveToFile("nfa.dot");
 		const auto dfa = nfa.Determinize();
 		dfa.SaveToFile("dfa.dot");
-		// auto moore = MealyMachine::FromDotFile("input.dot");
-		// moore.SaveToFile("mealy.dot");
-		// auto min = moore.Minimize();
-		// min.SaveToFile("min.dot");
 	}
 	catch (const std::exception& e)
 	{

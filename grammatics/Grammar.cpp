@@ -45,6 +45,11 @@ Grammar Grammar::FromString(const std::string& grammarText)
 	}
 
 	grammar.DetermineType();
+	if (grammar.GetType() == GrammarType::Unknown)
+	{
+		throw std::invalid_argument("Unknown grammar type");
+	}
+
 	return grammar;
 }
 
@@ -67,19 +72,39 @@ void Grammar::DetermineType()
 	bool isRightLinear = true;
 	bool isLeftLinear = true;
 
-	const std::regex rightGrammaticsReg(R"lit(^[a-z]+([A-Z])?|ε$)lit");
-	const std::regex leftGrammaticsReg(R"lit(^([A-Z])[a-z]+|ε$)lit");
-
 	for (const auto& rule : m_rules | std::views::values)
 	{
 		const std::string& rhs = rule;
-		if (!std::regex_match(rhs, rightGrammaticsReg))
+
+		int nt_count = 0;
+		int nt_index = -1;
+		for (size_t i = 0; i < rhs.length(); ++i)
+		{
+			if (std::isupper(rhs[i]))
+			{
+				nt_count++;
+				nt_index = static_cast<int>(i);
+			}
+		}
+
+		if (nt_count > 1)
 		{
 			isRightLinear = false;
-		}
-		if (!std::regex_match(rhs, leftGrammaticsReg))
-		{
 			isLeftLinear = false;
+			break;
+		}
+
+		if (nt_count == 1)
+		{
+			if (nt_index != 0)
+			{
+				isLeftLinear = false;
+			}
+
+			if (nt_index != rhs.length() - 1)
+			{
+				isRightLinear = false;
+			}
 		}
 	}
 
@@ -100,7 +125,7 @@ void Grammar::DetermineType()
 MealyMachine Grammar::ToNFA() const
 {
 	MealyMachine nfa;
-	if (m_startSymbol.empty() || m_type == GrammarType::Unknown)
+	if (m_startSymbol.empty())
 	{
 		return nfa;
 	}
@@ -112,17 +137,29 @@ MealyMachine Grammar::ToNFA() const
 	}
 
 	State finalState("Z");
-	nfa.m_states.insert(finalState);
 
-	if (m_nonTerminals.contains(finalState.GetName()))
+	bool needsFinalState = false;
+	for (const auto& rule : m_rules | std::views::values)
 	{
-		finalState = State("Z_final");
+		if (rule.length() <= 1 && !rule.empty())
+		{
+			needsFinalState = true;
+			break;
+		}
+	}
+
+	if (needsFinalState)
+	{
+		if (m_nonTerminals.contains(finalState.GetName()))
+		{
+			finalState = State("Z_final");
+		}
 		nfa.m_states.insert(finalState);
+		nfa.m_finalStates.insert(finalState);
 	}
 
 	if (m_type == GrammarType::RightLinear)
 	{
-		nfa.m_finalStates.insert(finalState);
 		for (const auto& [left, right] : m_rules)
 		{
 			const State fromState(left);
@@ -136,7 +173,7 @@ MealyMachine Grammar::ToNFA() const
 				std::string input(1, rhs[0]);
 				nfa.m_transitions[{ fromState, input }].insert({ finalState, "1" });
 			}
-			else if (rhs.length() == 2 && std::islower(rhs[0]) && std::isupper(rhs[1])) // A -> aB
+			else if (rhs.length() == 2 && std::islower(rhs[0]) && std::isupper(rhs[1]))
 			{
 				std::string input(1, rhs[0]);
 				State toState(rhs.substr(1, 1));
@@ -149,7 +186,6 @@ MealyMachine Grammar::ToNFA() const
 		State newStart("S0");
 		nfa.m_states.insert(newStart);
 		nfa.m_startState = newStart;
-		nfa.m_finalStates.insert(finalState);
 
 		for (const auto& [left, right] : m_rules)
 		{
@@ -158,11 +194,13 @@ MealyMachine Grammar::ToNFA() const
 			if (const std::string& rhs = right; rhs == "ε")
 			{
 				nfa.m_transitions[{ newStart, EPSILON }].insert({ toState, "1" });
+				nfa.m_finalStates.insert(toState);
 			}
 			else if (rhs.length() == 1 && std::islower(rhs[0]))
 			{
 				std::string input(1, rhs[0]);
 				nfa.m_transitions[{ newStart, input }].insert({ toState, "1" });
+				nfa.m_finalStates.insert(toState);
 			}
 			else if (rhs.length() == 2 && std::isupper(rhs[0]) && std::islower(rhs[1]))
 			{
@@ -170,6 +208,10 @@ MealyMachine Grammar::ToNFA() const
 				State fromState(rhs.substr(0, 1));
 				nfa.m_transitions[{ fromState, input }].insert({ toState, "0" });
 			}
+		}
+		if (nfa.m_states.contains(finalState))
+		{
+			nfa.m_states.erase(finalState);
 		}
 	}
 
