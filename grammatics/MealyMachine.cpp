@@ -2,6 +2,7 @@
 
 #include <fstream>
 #include <ranges>
+#include <sstream>
 
 namespace
 {
@@ -362,26 +363,6 @@ std::set<std::string> MealyMachine::GetAlphabet() const
 	return alphabet;
 }
 
-std::set<State> MealyMachine::GetFinalStates() const
-{
-	return m_finalStates;
-}
-
-std::set<State> MealyMachine::GetStates() const
-{
-	return m_states;
-}
-
-MealyTransitions MealyMachine::GetTransitions() const
-{
-	return m_transitions;
-}
-
-State MealyMachine::GetStartState() const
-{
-	return m_startState;
-}
-
 MealyMachine MealyMachine::FromDotFile(const std::string& filename)
 {
 	MealyMachine machine;
@@ -448,16 +429,20 @@ std::string MealyMachine::ToDotFile() const
 	{
 		std::string attributes;
 
-		if (s == m_startState) {
+		if (s == m_startState)
+		{
 			attributes += "style=bold, shape=box";
 		}
-		if (m_finalStates.contains(s)) {
-			if (!attributes.empty()) {
+		if (m_finalStates.contains(s))
+		{
+			if (!attributes.empty())
+			{
 				attributes += ", ";
 			}
 			attributes += "shape=doublecircle";
 		}
-		if (!attributes.empty()) {
+		if (!attributes.empty())
+		{
 			attributes = ", " + attributes;
 		}
 

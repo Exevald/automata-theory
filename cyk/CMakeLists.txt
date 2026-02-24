@@ -1,0 +1,10 @@
+add_executable(
+        cyk
+        CYKParser.cpp
+        CNFConverter.cpp
+        EpsilonRuleRemover.cpp
+        TestRunner.cpp
+        UnitRuleRemover.cpp
+        Utils.cpp
+        main.cpp
+)

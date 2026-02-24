@@ -240,5 +240,6 @@ samples/01-basics/string-joiner/out.txt
 .idea
 
 /cmake-build-debug
+/cmake-build-release
 /build
 /out

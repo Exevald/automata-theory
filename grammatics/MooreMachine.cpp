@@ -2,6 +2,7 @@
 
 #include <fstream>
 #include <ranges>
+#include <sstream>
 
 MooreMachine::MooreMachine()
 	: m_startState("")
@@ -68,64 +69,64 @@ MooreMachine::MooreMachine(const MealyMachine& mealy)
 
 MooreMachine MooreMachine::FromDotFile(const std::string& filename)
 {
-    MooreMachine machine;
-    std::ifstream file(filename);
-    if (!file.is_open())
-    {
-       throw std::runtime_error("Cannot open file: " + filename);
-    }
+	MooreMachine machine;
+	std::ifstream file(filename);
+	if (!file.is_open())
+	{
+		throw std::runtime_error("Cannot open file: " + filename);
+	}
 
-    std::string line;
-    std::regex stateRegex(R"lit(^\s*"(\w+)"\s*\[label\s*=\s*"[^/]+/\s*([^"]+)"\]\s*$)lit");
-    std::regex transitionRegex(R"lit(^\s*"(\w+)"\s*->\s*"(\w+)"\s*\[label\s*=\s*"([^"]+)"\]\s*$)lit");
+	std::string line;
+	std::regex stateRegex(R"lit(^\s*"(\w+)"\s*\[label\s*=\s*"[^/]+/\s*([^"]+)"\]\s*$)lit");
+	std::regex transitionRegex(R"lit(^\s*"(\w+)"\s*->\s*"(\w+)"\s*\[label\s*=\s*"([^"]+)"\]\s*$)lit");
 
-    std::map<std::string, State> stateMap;
+	std::map<std::string, State> stateMap;
 
-    while (std::getline(file, line))
-    {
-       std::smatch match;
+	while (std::getline(file, line))
+	{
+		std::smatch match;
 
-       if (std::regex_match(line, match, stateRegex))
-       {
-          std::string name = match[1];
-          std::string output = match[2];
+		if (std::regex_match(line, match, stateRegex))
+		{
+			std::string name = match[1];
+			std::string output = match[2];
 
-          State state(name);
-          stateMap[name] = state;
-          machine.m_states.insert(state);
-          machine.m_outputsMap[state] = output;
+			State state(name);
+			stateMap[name] = state;
+			machine.m_states.insert(state);
+			machine.m_outputsMap[state] = output;
 
-          if (machine.m_startState.GetName().empty())
-          {
-             machine.m_startState = state;
-          }
-       }
-       else if (std::regex_match(line, match, transitionRegex))
-       {
-          std::string srcStateName = match[1];
-          std::string dstStateName = match[2];
-          std::string input = match[3];
+			if (machine.m_startState.GetName().empty())
+			{
+				machine.m_startState = state;
+			}
+		}
+		else if (std::regex_match(line, match, transitionRegex))
+		{
+			std::string srcStateName = match[1];
+			std::string dstStateName = match[2];
+			std::string input = match[3];
 
-          if (!stateMap.contains(srcStateName) || !stateMap.contains(dstStateName))
-          {
-             throw std::runtime_error("Transition references unknown state in DOT file.");
-          }
+			if (!stateMap.contains(srcStateName) || !stateMap.contains(dstStateName))
+			{
+				throw std::runtime_error("Transition references unknown state in DOT file.");
+			}
 
-          State srcState = stateMap.at(srcStateName);
-          const State& dstState = stateMap.at(dstStateName);
+			State srcState = stateMap.at(srcStateName);
+			const State& dstState = stateMap.at(dstStateName);
 
-          machine.m_transitions[std::make_pair(srcState, input)] = dstState;
-       }
-    }
+			machine.m_transitions[std::make_pair(srcState, input)] = dstState;
+		}
+	}
 
-    file.close();
+	file.close();
 
-    if (machine.m_startState.GetName().empty() && !machine.m_states.empty())
-    {
-        machine.m_startState = *machine.m_states.begin();
-    }
+	if (machine.m_startState.GetName().empty() && !machine.m_states.empty())
+	{
+		machine.m_startState = *machine.m_states.begin();
+	}
 
-    return machine;
+	return machine;
 }
 
 MooreMachine MooreMachine::Minimize() const
@@ -272,24 +273,4 @@ void MooreMachine::SaveToFile(const std::string& filename) const
 	}
 	file << ToDotFile();
 	file.close();
-}
-
-std::set<State> MooreMachine::GetStates() const
-{
-	return m_states;
-}
-
-std::map<State, std::string> MooreMachine::GetOutputs() const
-{
-	return m_outputsMap;
-}
-
-MooreTransitions MooreMachine::GetTransitions() const
-{
-	return m_transitions;
-}
-
-State MooreMachine::GetStartState() const
-{
-	return m_startState;
 }
