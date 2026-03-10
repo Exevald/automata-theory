@@ -1,0 +1,3 @@
+<S> -> <A> c | d <B> a
+<A> -> <A> a | <A> b | d a <B> c
+<B> -> c <B> | e
